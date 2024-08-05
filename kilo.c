@@ -32,12 +32,12 @@ void die(const char *s) {
   exit(1);
 }
 
-void disableRawMode() {
+void disableRawMode(void) {
   if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1)
     die("tcsetattr");
 }
 
-void enableRawMode() {
+void enableRawMode(void) {
   if (tcgetattr(STDIN_FILENO, &E.orig_termios) == -1)
     die("tcgetattr");
   atexit(disableRawMode);
@@ -54,7 +54,7 @@ void enableRawMode() {
     die("tcsetattr");
 }
 
-char editorReadKey() {
+char editorReadKey(void) {
   int nread;
   char c;
   while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
@@ -64,11 +64,32 @@ char editorReadKey() {
   return c;
 }
 
+int getCursorPosition(int *rows, int *cols) {
+  if (write(STDOUT_FILENO, "\x1b[6n", 4) != 4)
+    return -1;
+
+  printf("\r\n");
+  char c;
+  while (read(STDIN_FILENO, &c, 1) == 1) {
+    if (iscntrl(c)) {
+      printf("%d\r\n", c);
+    } else {
+      printf("%d ('%c')\r\n", c, c);
+    }
+  }
+
+  editorReadKey();
+
+  return -1;
+}
+
 int getWindowSize(int *rows, int *cols) {
   struct winsize ws;
 
-  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
-    return -1;
+  if (1 || ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
+    if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12)
+      return -1;
+    return getCursorPosition(rows, cols);
   } else {
     *cols = ws.ws_col;
     *rows = ws.ws_row;
@@ -78,13 +99,13 @@ int getWindowSize(int *rows, int *cols) {
 
 /* output */
 
-void editorDrawRows() {
+void editorDrawRows(void) {
   for (int y = 0; y < E.screenrows; y++) {
     write(STDOUT_FILENO, "~\r\n", 3);
   }
 }
 
-void editorRefreshScreen() {
+void editorRefreshScreen(void) {
   write(STDOUT_FILENO, "\x1b[2J", 4);
   write(STDOUT_FILENO, "\x1b[H", 3);
 
@@ -95,7 +116,7 @@ void editorRefreshScreen() {
 
 /* input */
 
-void editorProcessKeypress() {
+void editorProcessKeypress(void) {
   char c = editorReadKey();
 
   switch (c) {
@@ -109,12 +130,12 @@ void editorProcessKeypress() {
 
 /* init */
 
-void initEditor() {
+void initEditor(void) {
   if (getWindowSize(&E.screenrows, &E.screenrows) == -1)
     die("getWindowSize");
 }
 
-int main() {
+int main(void) {
   enableRawMode();
   initEditor();
 
